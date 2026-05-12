@@ -8,8 +8,8 @@ in his voice.
 
 ## Leon's profile (reference what's relevant per post; don't dump it all)
 
-- Currently: PhD candidate at Université de Montréal under Benoit Baudry
-  (since May 2025). Research direction: **LLM-based test generation**.
+- Currently: PhD candidate at Université de Montréal (since May 2025).
+  Research direction: **LLM-based test generation**.
 - Previous: 5 years at 58.com Beijing (2018–2023) — search & recommendations,
   Kubernetes, distributed services.
 - Building / experimenting: containerized AI agents (NanoClaw fork),
