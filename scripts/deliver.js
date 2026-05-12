@@ -154,6 +154,26 @@ async function discordPost(channelId, botToken, body) {
   }
 }
 
+// Resolves a user ID to a DM channel ID. The bot must share at least one
+// server with the user. Idempotent: Discord returns the same DM channel
+// every time for the same recipient.
+async function openDMChannel(botToken, userId) {
+  const res = await fetch(
+    `https://discord.com/api/v10/users/@me/channels`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bot ${botToken}` },
+      body: JSON.stringify({ recipient_id: userId })
+    }
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(`Discord open-DM failed: ${err.message || res.statusText}`);
+  }
+  const data = await res.json();
+  return data.id;
+}
+
 // Sends digest as Discord Embeds — styled cards with a color sidebar.
 // The digest is split into sections (separated by ━━━ dividers) and each
 // section becomes one embed. Up to 10 embeds per API call; overflow goes
@@ -246,14 +266,30 @@ async function main() {
 
       case 'discord': {
         const botToken = process.env.DISCORD_BOT_TOKEN;
-        const channelId = delivery.channelId;
         if (!botToken) throw new Error('DISCORD_BOT_TOKEN not found in .env');
-        if (!channelId) throw new Error('delivery.channelId not found in config.json');
-        await sendDiscord(digestText, botToken, channelId);
+
+        // --dm flag switches delivery from the news channel to a private DM
+        // with the configured user. Reads commentDelivery.userId from config.
+        const dmMode = process.argv.includes('--dm');
+
+        let targetChannelId;
+        let targetLabel;
+        if (dmMode) {
+          const userId = config.commentDelivery?.userId;
+          if (!userId) throw new Error('config.commentDelivery.userId not set (required for --dm)');
+          targetChannelId = await openDMChannel(botToken, userId);
+          targetLabel = `DM user ${userId}`;
+        } else {
+          targetChannelId = delivery.channelId;
+          if (!targetChannelId) throw new Error('delivery.channelId not found in config.json');
+          targetLabel = `channel ${targetChannelId}`;
+        }
+
+        await sendDiscord(digestText, botToken, targetChannelId);
         console.log(JSON.stringify({
           status: 'ok',
           method: 'discord',
-          message: `Digest sent to Discord channel ${channelId}`
+          message: `Digest sent to Discord ${targetLabel}`
         }));
         break;
       }
