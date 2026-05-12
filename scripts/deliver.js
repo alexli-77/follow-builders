@@ -209,16 +209,44 @@ async function sendDiscordPlain(text, botToken, channelId) {
   const title = lines[0].trim();
   const body = lines.slice(1).join('\n').trimStart();
 
+  // For each ━━━-separated author block, we emit TWO messages:
+  //   1) meta: header (**Name** (@handle)) + URL lines (Post: <URL>)
+  //   2) commentary: just the prose, no header, no URL
+  //
+  // This way the user can long-press the commentary message and copy ONLY
+  // the prose — no noise from the header or links. The meta message stays
+  // copyable on its own if they want the citation.
   const rawSections = body.split(SECTION_SEP).map(s => s.trim()).filter(Boolean);
-  const sectionMessages = rawSections.flatMap(s =>
-    s.length <= MAX_LEN ? [s] : splitChunks(s, MAX_LEN)
-  );
 
-  const allMessages = [`**${title}**`, ...sectionMessages];
+  const messages = [`**${title}**`];
 
-  for (let i = 0; i < allMessages.length; i++) {
-    await discordPost(channelId, botToken, { content: allMessages[i] });
-    if (i < allMessages.length - 1) await new Promise(r => setTimeout(r, 600));
+  for (const section of rawSections) {
+    const sectionLines = section.split('\n');
+    const header = sectionLines[0]; // **Name** (@handle)
+    const urlLines = sectionLines.filter(l => l.trim().startsWith('Post:'));
+    const commentary = sectionLines
+      .slice(1)
+      .filter(l => !l.trim().startsWith('Post:'))
+      .join('\n')
+      .trim();
+
+    // Message A: header + URLs (the metadata, copyable as a unit)
+    const metaMsg = [header, ...urlLines].filter(Boolean).join('\n');
+    if (metaMsg) messages.push(metaMsg);
+
+    // Message B: commentary alone (the prose, copyable as a unit)
+    if (commentary) {
+      if (commentary.length <= MAX_LEN) {
+        messages.push(commentary);
+      } else {
+        messages.push(...splitChunks(commentary, MAX_LEN));
+      }
+    }
+  }
+
+  for (let i = 0; i < messages.length; i++) {
+    await discordPost(channelId, botToken, { content: messages[i] });
+    if (i < messages.length - 1) await new Promise(r => setTimeout(r, 600));
   }
 }
 
