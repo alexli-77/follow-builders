@@ -52,9 +52,10 @@ async function loadLocalPrompt(filename) {
 // -- Prompt builders ---------------------------------------------------------
 
 function buildNewsPrompt(data) {
-  const { prompts, podcasts, x, blogs, stats } = data;
+  const { prompts, podcasts, x, blogs, stats, config } = data;
+  const language = config?.language || 'en';
 
-  const systemPrompt = [
+  const parts = [
     prompts?.digest_intro || '',
     '',
     '## Podcast summary instructions',
@@ -65,13 +66,24 @@ function buildNewsPrompt(data) {
     '',
     '## Blog summary instructions',
     prompts?.summarize_blogs || ''
-  ].join('\n');
+  ];
+  if (language === 'bilingual' || language === 'zh') {
+    parts.push('', '## Translation / bilingual output instructions', prompts?.translate || '');
+  }
+  const systemPrompt = parts.join('\n');
+
+  const langInstruction = ({
+    en: 'Output the digest in English only.',
+    zh: 'Output the digest entirely in Mandarin Chinese, following the translation instructions.',
+    bilingual: 'Output the digest in BILINGUAL format. For each builder / podcast / blog post: write the English summary first, leave a blank line, then write the Chinese translation directly below it, then move to the next item. Do NOT output all English first and all Chinese after. Follow the translation instructions for tone, technical-term handling, and formatting.'
+  })[language] || 'Output the digest in English only.';
 
   const userMessage = [
     `Generate the daily AI Builders digest.`,
     ``,
     `Date: ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}`,
     `Counts: ${stats.podcastEpisodes} podcast episodes, ${stats.xBuilders} X builders (${stats.totalTweets} tweets), ${stats.blogPosts} blog posts.`,
+    `Language mode: ${language}. ${langInstruction}`,
     ``,
     `Output format: a single message body, no markdown headers, sections separated by a line containing only ━━━ (three or more box-drawing horizontal lines). First line should be the digest title.`,
     ``,
@@ -86,6 +98,29 @@ function buildNewsPrompt(data) {
   ].join('\n');
 
   return { systemPrompt, userMessage };
+}
+
+async function buildReplyXPrompt(data) {
+  const { x } = data;
+
+  const replyPrompt = await loadLocalPrompt('reply-tweets.md');
+  if (!replyPrompt) {
+    throw new Error('Could not load prompts/reply-tweets.md');
+  }
+
+  const dateStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Toronto' });
+
+  const userMessage = [
+    `Write Leon's X reply drafts for ${dateStr} (America/Toronto).`,
+    ``,
+    `Source data — X posts from the last 24h, grouped by author:`,
+    JSON.stringify(x, null, 2),
+    ``,
+    `Follow the system instructions exactly. Output only the reply digest body in English — first line must be "X Replies — ${dateStr} (America/Toronto)".`,
+    `If the X feed is empty, output exactly: "No X posts captured today (feed-x.json is empty)."`
+  ].join('\n');
+
+  return { systemPrompt: replyPrompt, userMessage };
 }
 
 async function buildCommentXPrompt(data) {
@@ -172,8 +207,10 @@ async function main() {
     plan = buildNewsPrompt(data);
   } else if (mode === 'comment-x') {
     plan = await buildCommentXPrompt(data);
+  } else if (mode === 'reply-x') {
+    plan = await buildReplyXPrompt(data);
   } else {
-    process.stderr.write(`synthesize.js: unknown mode "${mode}" (use news or comment-x)\n`);
+    process.stderr.write(`synthesize.js: unknown mode "${mode}" (use news / comment-x / reply-x)\n`);
     process.exit(1);
   }
 
