@@ -106,8 +106,8 @@ async function buildCommentXPrompt(data) {
     `Source data — X posts from the last 24h, grouped by author:`,
     JSON.stringify(x, null, 2),
     ``,
-    `Follow the system instructions exactly. Output only the commentary message body — first line should be "评论卡 — ${dateStr}".`,
-    `If the X feed is empty, output exactly: "今天没有抓到任何 X post（feed-x.json 为空）。"`
+    `Follow the system instructions exactly. Output only the commentary message body in English — first line must be "Daily X Commentary — ${dateStr} (America/Toronto)".`,
+    `If the X feed is empty, output exactly: "No X posts captured today (feed-x.json is empty)."`
   ].join('\n');
 
   return { systemPrompt: commentPrompt, userMessage };
