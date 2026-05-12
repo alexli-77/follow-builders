@@ -174,31 +174,34 @@ async function openDMChannel(botToken, userId) {
   return data.id;
 }
 
-// Sends digest as Discord Embeds — styled cards with a color sidebar.
-// The digest is split into sections (separated by ━━━ dividers) and each
-// section becomes one embed. Up to 10 embeds per API call; overflow goes
-// in a follow-up message.
+// Sends digest as plain-text Discord messages, one message per ━━━ section.
+// Plain content (not embeds) so the user can select and copy text on all
+// Discord clients — embed text is not reliably selectable.
+//
+// Discord's plain-content limit is 2000 chars; we cap at 1900 for safety.
+// Long sections that exceed the cap get split at newlines.
 async function sendDiscord(text, botToken, channelId) {
-  const EMBED_COLOR = 0x5865F2; // Discord blurple
+  const MAX_LEN = 1900;
   const SECTION_SEP = /\n━+\n/;
-  const DESC_MAX = 3900;
 
-  // Extract title line (first non-empty line)
+  // Extract title line (first non-empty line) and body
   const lines = text.trimStart().split('\n');
   const title = lines[0].trim();
   const body = lines.slice(1).join('\n').trimStart();
 
-  // Split body into logical sections at ━━━ dividers, then sub-split if over limit
+  // Build the message sequence:
+  //   message 1: title (sent as bold)
+  //   message 2..N: each ━━━-separated section as its own message
   const rawSections = body.split(SECTION_SEP).map(s => s.trim()).filter(Boolean);
-  const sections = rawSections.flatMap(s => splitChunks(s, DESC_MAX));
+  const sectionMessages = rawSections.flatMap(s =>
+    s.length <= MAX_LEN ? [s] : splitChunks(s, MAX_LEN)
+  );
 
-  // One embed per message to stay within Discord's 6000-char-per-message limit.
-  // First message gets the digest title; the rest are continuation embeds.
-  for (let i = 0; i < sections.length; i++) {
-    const embed = { color: EMBED_COLOR, description: sections[i] };
-    if (i === 0) embed.title = title.slice(0, 256);
-    await discordPost(channelId, botToken, { embeds: [embed] });
-    if (i < sections.length - 1) await new Promise(r => setTimeout(r, 600));
+  const allMessages = [`**${title}**`, ...sectionMessages];
+
+  for (let i = 0; i < allMessages.length; i++) {
+    await discordPost(channelId, botToken, { content: allMessages[i] });
+    if (i < allMessages.length - 1) await new Promise(r => setTimeout(r, 600));
   }
 }
 

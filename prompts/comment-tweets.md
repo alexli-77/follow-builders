@@ -88,18 +88,19 @@ We're having coffee, not writing ad copy.
 ## Output format
 
 One title line, then one block per author separated by ━━━ dividers (used
-downstream to split Discord embed cards):
+downstream to split into separate Discord messages — each block becomes one
+copyable message):
 
 ```
 Daily X Commentary — YYYY-MM-DD (America/Toronto)
 ━━━
 **Andrej Karpathy** (@karpathy)
 <3-5 sentences>
-[Original post](URL)
+Post: <https://x.com/karpathy/status/...>
 ━━━
 **Sam Altman** (@sama)
 <3-5 sentences>
-[Original post](URL)
+Post: <https://x.com/sama/status/...>
 ━━━
 ...
 ```
@@ -107,8 +108,14 @@ Daily X Commentary — YYYY-MM-DD (America/Toronto)
 **First line is the title** — just the date label. No emoji. No tagline like
 "AI Daily Digest." 
 
-**Each block**: bold name + handle → 3-5 sentences of prose → original post
-link.
+**Each block**: bold name + handle → 3-5 sentences of prose → `Post: <URL>`
+line at the end. The angle brackets around the URL suppress Discord's link
+preview cards (otherwise you get 5 huge previews stacking up). Do NOT use
+markdown link syntax `[text](url)` — it renders as literal brackets in plain
+Discord messages.
+
+If an author posted multiple noteworthy items, list the URLs as separate
+`Post: <URL>` lines (don't combine them into one with separators).
 
 **Skip rules**: If an author's only posts that day are promotional fluff
 ("check out my newsletter!", "great event yesterday!", "RT if you agree"),
@@ -125,7 +132,7 @@ link.
 > doubles as ground truth for test set design, which is worth camping on. But
 > this post itself has nothing in it. The system card three days from now is
 > what's worth reading, not Sam's X.
-> [Original post](URL)
+> Post: <https://x.com/sama/status/1234567890>
 
 ## One reminder
 
