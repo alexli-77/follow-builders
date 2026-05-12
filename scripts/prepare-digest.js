@@ -161,7 +161,9 @@ async function main() {
 main().catch(err => {
   console.error(JSON.stringify({
     status: 'error',
-    message: err.message
+    message: err.message,
+    cause: err.cause ? (err.cause.message || String(err.cause)) : undefined,
+    code: err.code
   }));
   process.exit(1);
 });
