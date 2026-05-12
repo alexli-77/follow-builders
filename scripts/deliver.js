@@ -17,6 +17,7 @@
 // Delivery methods:
 //   - "telegram": sends via Telegram Bot API (needs TELEGRAM_BOT_TOKEN + chat ID)
 //   - "email": sends via Resend API (needs RESEND_API_KEY + email address)
+//   - "discord": sends via Discord Bot API (needs DISCORD_BOT_TOKEN + channel ID)
 //   - "stdout" (default): just prints to terminal
 // ============================================================================
 
@@ -122,6 +123,65 @@ async function sendTelegram(text, botToken, chatId) {
   }
 }
 
+// -- Discord Delivery --------------------------------------------------------
+
+// Splits text into chunks no longer than maxLen, breaking at newlines.
+function splitChunks(text, maxLen) {
+  const chunks = [];
+  let remaining = text;
+  while (remaining.length > 0) {
+    if (remaining.length <= maxLen) { chunks.push(remaining); break; }
+    let splitAt = remaining.lastIndexOf('\n', maxLen);
+    if (splitAt < maxLen * 0.5) splitAt = maxLen;
+    chunks.push(remaining.slice(0, splitAt));
+    remaining = remaining.slice(splitAt).trimStart();
+  }
+  return chunks;
+}
+
+async function discordPost(channelId, botToken, body) {
+  const res = await fetch(
+    `https://discord.com/api/v10/channels/${channelId}/messages`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bot ${botToken}` },
+      body: JSON.stringify(body)
+    }
+  );
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(`Discord API error: ${err.message || res.statusText}`);
+  }
+}
+
+// Sends digest as Discord Embeds — styled cards with a color sidebar.
+// The digest is split into sections (separated by ━━━ dividers) and each
+// section becomes one embed. Up to 10 embeds per API call; overflow goes
+// in a follow-up message.
+async function sendDiscord(text, botToken, channelId) {
+  const EMBED_COLOR = 0x5865F2; // Discord blurple
+  const SECTION_SEP = /\n━+\n/;
+  const DESC_MAX = 3900;
+
+  // Extract title line (first non-empty line)
+  const lines = text.trimStart().split('\n');
+  const title = lines[0].trim();
+  const body = lines.slice(1).join('\n').trimStart();
+
+  // Split body into logical sections at ━━━ dividers, then sub-split if over limit
+  const rawSections = body.split(SECTION_SEP).map(s => s.trim()).filter(Boolean);
+  const sections = rawSections.flatMap(s => splitChunks(s, DESC_MAX));
+
+  // One embed per message to stay within Discord's 6000-char-per-message limit.
+  // First message gets the digest title; the rest are continuation embeds.
+  for (let i = 0; i < sections.length; i++) {
+    const embed = { color: EMBED_COLOR, description: sections[i] };
+    if (i === 0) embed.title = title.slice(0, 256);
+    await discordPost(channelId, botToken, { embeds: [embed] });
+    if (i < sections.length - 1) await new Promise(r => setTimeout(r, 600));
+  }
+}
+
 // -- Email Delivery (Resend) -------------------------------------------------
 
 // Sends the digest via Resend's email API.
@@ -180,6 +240,20 @@ async function main() {
           status: 'ok',
           method: 'telegram',
           message: 'Digest sent to Telegram'
+        }));
+        break;
+      }
+
+      case 'discord': {
+        const botToken = process.env.DISCORD_BOT_TOKEN;
+        const channelId = delivery.channelId;
+        if (!botToken) throw new Error('DISCORD_BOT_TOKEN not found in .env');
+        if (!channelId) throw new Error('delivery.channelId not found in config.json');
+        await sendDiscord(digestText, botToken, channelId);
+        console.log(JSON.stringify({
+          status: 'ok',
+          method: 'discord',
+          message: `Digest sent to Discord channel ${channelId}`
         }));
         break;
       }

@@ -34,6 +34,9 @@ jobs:
         run: cd scripts && npm install
 
       - name: Generate feeds
+        # Scheduled runs only refresh podcasts + blogs (free APIs).
+        # Tweets stay pinned to upstream zarazhangrui/follow-builders to avoid
+        # paying for X API. Manual workflow_dispatch can still target any mode.
         env:
           X_BEARER_TOKEN: ${{ secrets.X_BEARER_TOKEN }}
           POD2TXT_API_KEY: ${{ secrets.POD2TXT_API_KEY }}
@@ -41,7 +44,7 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.mode }}" != "all" ]; then
             cd scripts && node generate-feed.js --${{ inputs.mode }}
           else
-            cd scripts && node generate-feed.js
+            cd scripts && node generate-feed.js --podcasts-only && node generate-feed.js --blogs-only
           fi
 
       - name: Commit and push feeds
