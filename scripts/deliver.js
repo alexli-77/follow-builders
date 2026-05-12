@@ -174,24 +174,41 @@ async function openDMChannel(botToken, userId) {
   return data.id;
 }
 
-// Sends digest as plain-text Discord messages, one message per ━━━ section.
-// Plain content (not embeds) so the user can select and copy text on all
-// Discord clients — embed text is not reliably selectable.
-//
-// Discord's plain-content limit is 2000 chars; we cap at 1900 for safety.
-// Long sections that exceed the cap get split at newlines.
-async function sendDiscord(text, botToken, channelId) {
-  const MAX_LEN = 1900;
-  const SECTION_SEP = /\n━+\n/;
+// Two delivery formats:
+//   sendDiscordEmbeds: styled cards with color sidebar. Better-looking for
+//     skimming, but text inside embeds is NOT reliably selectable on Discord
+//     clients. Used for news digest in a public channel.
+//   sendDiscordPlain: plain-content messages, one per ━━━ section. Fully
+//     copyable on all clients. Used for personal commentary in a DM.
 
-  // Extract title line (first non-empty line) and body
+async function sendDiscordEmbeds(text, botToken, channelId) {
+  const EMBED_COLOR = 0x5865F2; // Discord blurple
+  const SECTION_SEP = /\n━+\n/;
+  const DESC_MAX = 3900;
+
   const lines = text.trimStart().split('\n');
   const title = lines[0].trim();
   const body = lines.slice(1).join('\n').trimStart();
 
-  // Build the message sequence:
-  //   message 1: title (sent as bold)
-  //   message 2..N: each ━━━-separated section as its own message
+  const rawSections = body.split(SECTION_SEP).map(s => s.trim()).filter(Boolean);
+  const sections = rawSections.flatMap(s => splitChunks(s, DESC_MAX));
+
+  for (let i = 0; i < sections.length; i++) {
+    const embed = { color: EMBED_COLOR, description: sections[i] };
+    if (i === 0) embed.title = title.slice(0, 256);
+    await discordPost(channelId, botToken, { embeds: [embed] });
+    if (i < sections.length - 1) await new Promise(r => setTimeout(r, 600));
+  }
+}
+
+async function sendDiscordPlain(text, botToken, channelId) {
+  const MAX_LEN = 1900; // Discord plain-content cap is 2000; safety margin
+  const SECTION_SEP = /\n━+\n/;
+
+  const lines = text.trimStart().split('\n');
+  const title = lines[0].trim();
+  const body = lines.slice(1).join('\n').trimStart();
+
   const rawSections = body.split(SECTION_SEP).map(s => s.trim()).filter(Boolean);
   const sectionMessages = rawSections.flatMap(s =>
     s.length <= MAX_LEN ? [s] : splitChunks(s, MAX_LEN)
@@ -271,9 +288,11 @@ async function main() {
         const botToken = process.env.DISCORD_BOT_TOKEN;
         if (!botToken) throw new Error('DISCORD_BOT_TOKEN not found in .env');
 
-        // --dm flag switches delivery from the news channel to a private DM
-        // with the configured user. Reads commentDelivery.userId from config.
+        // --dm     routes to a DM with config.commentDelivery.userId
+        // --plain  sends as plain content (copyable) instead of embed cards
+        // The two flags are independent so any combination works.
         const dmMode = process.argv.includes('--dm');
+        const plainMode = process.argv.includes('--plain');
 
         let targetChannelId;
         let targetLabel;
@@ -288,10 +307,16 @@ async function main() {
           targetLabel = `channel ${targetChannelId}`;
         }
 
-        await sendDiscord(digestText, botToken, targetChannelId);
+        if (plainMode) {
+          await sendDiscordPlain(digestText, botToken, targetChannelId);
+        } else {
+          await sendDiscordEmbeds(digestText, botToken, targetChannelId);
+        }
+
         console.log(JSON.stringify({
           status: 'ok',
           method: 'discord',
+          format: plainMode ? 'plain' : 'embeds',
           message: `Digest sent to Discord ${targetLabel}`
         }));
         break;
