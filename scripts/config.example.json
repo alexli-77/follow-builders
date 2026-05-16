@@ -1,0 +1,16 @@
+{
+  "platform": "other",
+  "language": "bilingual",
+  "timezone": "America/Toronto",
+  "frequency": "daily",
+  "deliveryTime": "08:00",
+  "delivery": {
+    "method": "discord",
+    "channelId": "YOUR_DISCORD_CHANNEL_ID"
+  },
+  "commentDelivery": {
+    "method": "discord",
+    "userId": "YOUR_DISCORD_USER_ID"
+  },
+  "onboardingComplete": true
+}

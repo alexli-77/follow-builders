@@ -27,7 +27,7 @@ import { existsSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 
-const CLAUDE_BIN = '/opt/homebrew/bin/claude';
+const CLAUDE_BIN = process.env.CLAUDE_BIN || 'claude';
 const USER_DIR = join(homedir(), '.follow-builders');
 
 // -- Read stdin --------------------------------------------------------------
